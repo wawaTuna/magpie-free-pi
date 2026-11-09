@@ -8,7 +8,7 @@
 
 **DeepSeek V4.1 Flash、DeepSeek V4 Flash、GLM 5.3 Flash、Particle，在 [Magpie](https://usemagpie.ai) 里免费无限用。**
 
-![CI](https://github.com/wawaTuna/magpie-free-pi/actions/workflows/ci.yml/badge.svg) ![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![CI](https://github.com/wawaTuna/magpie-free-pi/actions/workflows/ci.yml/badge.svg) [![npm](https://img.shields.io/npm/v/magpie-free-pi)](https://www.npmjs.com/package/magpie-free-pi) ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 **[快速开始](#快速开始) · [多账号](#多账号) · [原理](#原理) · [隐私](#隐私) · [English](README.md)**
 

@@ -8,7 +8,7 @@ Free models for Magpie, funded by ads — no API key, no card, one GitHub sign-i
 
 **DeepSeek V4.1 Flash, DeepSeek V4 Flash, GLM 5.3 Flash and Particle, free and unlimited in [Magpie](https://usemagpie.ai).**
 
-![CI](https://github.com/wawaTuna/magpie-free-pi/actions/workflows/ci.yml/badge.svg) ![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![CI](https://github.com/wawaTuna/magpie-free-pi/actions/workflows/ci.yml/badge.svg) [![npm](https://img.shields.io/npm/v/magpie-free-pi)](https://www.npmjs.com/package/magpie-free-pi) ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 **[Quick start](#quick-start) · [Multiple accounts](#multiple-accounts) · [How it works](#how-it-works) · [Privacy](#privacy) · [简体中文](README.zh-CN.md)**
 
