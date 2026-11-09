@@ -71,10 +71,26 @@ const server = async () => {
               instructions:
                 `Open the URL, enter code ${flow.userCode}, and approve. ` +
                 "Note: free-pi funds free inference with ads and training on session data.",
-              method: "code",
+              // "auto": magpie calls callback() itself and waits for it to
+              // resolve while the user approves in the browser. ("code"
+              // would make magpie wait for the user to paste a code first,
+              // which silently strands the device flow: GitHub's success
+              // page shows no code to paste.)
+              method: "auto",
               callback: async () => {
                 await submitConsent(flow.sessionId);
-                const token = await pollForToken(flow.sessionId, flow.interval);
+                let token;
+                try {
+                  token = await pollForToken(flow.sessionId, flow.interval);
+                } catch (err) {
+                  return {
+                    type: "failed",
+                    error:
+                      "The GitHub sign-in did not complete in time. " +
+                      "Start it again and approve the code while it is fresh. " +
+                      `(${String(err?.message || err).slice(0, 200)})`,
+                  };
+                }
                 // Magpie keeps one account per accountId: the free-pi
                 // handle is the account's identity, so signing in with a
                 // second GitHub account ADDS an account (native Magpie
@@ -82,15 +98,34 @@ const server = async () => {
                 // first. The token also joins the shared core pool, so
                 // dsh-free-pi and the standalone proxy rotate over the
                 // same sign-ins on this machine.
-                let accountId = PROVIDER_ID;
+                let accountId = null;
                 try {
                   const me = await fetchMe(token);
-                  accountId = me?.handle || me?.user_id || PROVIDER_ID;
-                  addAccount({ label: accountId, jwt: token });
+                  accountId = me?.handle || me?.user_id || null;
                 } catch {
-                  // /me hiccup: fall back to the shared id; the sign-in
-                  // itself still works.
+                  // /me hiccup: fall back to the token's own claims below.
                 }
+                if (!accountId) {
+                  try {
+                    const claims = JSON.parse(
+                      Buffer.from(token.split(".")[1], "base64url").toString("utf8"),
+                    );
+                    accountId = claims.handle || claims.login || claims.user_id || claims.sub || null;
+                  } catch {
+                    // Undecodable token: handled by the failure below.
+                  }
+                }
+                if (!accountId) {
+                  return {
+                    type: "failed",
+                    error:
+                      "GitHub approved the sign-in, but free-pi did not say which " +
+                      "account it belongs to, so it was not saved (saving it " +
+                      "without an identity would replace the existing account). " +
+                      "Please try adding it again.",
+                  };
+                }
+                addAccount({ label: accountId, jwt: token });
                 return {
                   type: "success",
                   access: token,
