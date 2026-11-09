@@ -232,6 +232,32 @@ export async function pollForToken(sessionId, intervalSec = 5, { timeoutMs = 15 
   }
 }
 
+/**
+ * One token poll, for callers that drive the wait themselves (the DSH
+ * panel polls over HTTP). Returns { token } once GitHub authorization
+ * completes, or { pending: true, retryAfter? } while it has not. Throws
+ * with .code === "consent_required" when the server never recorded the
+ * consent for this session.
+ */
+export async function pollDeviceTokenOnce(sessionId) {
+  const res = await postJson("/auth/token", { session_id: sessionId });
+  if (res.status === 403) {
+    const body = await res.json().catch(() => undefined);
+    if (body?.code === "consent_required") {
+      const err = new Error("consent_required: server did not record consent");
+      err.code = "consent_required";
+      throw err;
+    }
+  }
+  if (!res.ok) throw new Error(`token poll failed: HTTP ${res.status}`);
+  const body = await res.json().catch(() => ({}));
+  if (typeof body?.token === "string" && body.token) return { token: body.token };
+  return {
+    pending: true,
+    retryAfter: typeof body?.retry_after === "number" ? body.retry_after : undefined,
+  };
+}
+
 /** Full login: start flow, let the caller present the code, consent, poll, save. */
 export async function deviceLogin({ present, save = true } = {}) {
   const flow = await startDeviceFlow();
@@ -350,15 +376,53 @@ export function addAccount({ label, jwt } = {}) {
   return entry;
 }
 
+/**
+ * Account metadata for management UIs, aligned with loadAccounts():
+ * where each sign-in comes from and whether it can be removed from here.
+ * Only accounts.json pool entries are removable — the credentials.json
+ * sign-in belongs to free-pi-cli's file (delete the file or re-run its
+ * login to change it), and config/env values belong to the host.
+ * Never carries JWT values.
+ */
+export function describeAccounts(explicit) {
+  const poolById = new Map(readAccountPool().map((e) => [e.id, e]));
+  return loadAccounts(explicit).map((account) => {
+    const entry = poolById.get(account.id);
+    const source = entry ? "pool" : account.id === "default" ? "credentials" : account.id;
+    return {
+      id: account.id,
+      label: account.label,
+      source,
+      removable: Boolean(entry),
+      addedAt: entry?.addedAt ?? null,
+      ...accountStatus(account.id),
+    };
+  });
+}
+
+/**
+ * Remove one accounts.json pool entry by id. Returns false when the id is
+ * not a pool entry (the implicit credentials/config/env accounts are not
+ * removable through the pool — see describeAccounts).
+ */
+export function removeAccount(id) {
+  const list = readAccountPool();
+  const index = list.findIndex((e) => e.id === id);
+  if (index < 0) return false;
+  list.splice(index, 1);
+  saveAccounts(list);
+  return true;
+}
+
 // --- per-process account health (quota / validity cache) -------------------
 
-const accountHealth = new Map(); // id -> { invalid, exhaustedUntil, remainingCredits, quotaAt }
+const accountHealth = new Map(); // id -> { invalid, exhaustedUntil, pauseReason, remainingCredits, quotaAt }
 let rotationCursor = 0;
 
 function healthOf(id) {
   let h = accountHealth.get(id);
   if (!h) {
-    h = { invalid: false, exhaustedUntil: 0, remainingCredits: null, quotaAt: 0 };
+    h = { invalid: false, exhaustedUntil: 0, pauseReason: null, remainingCredits: null, quotaAt: 0 };
     accountHealth.set(id, h);
   }
   return h;
@@ -369,7 +433,44 @@ export function markAccountInvalid(id) {
 }
 
 export function markAccountExhausted(id, until = Date.now() + 10 * 60 * 1000) {
-  healthOf(id).exhaustedUntil = until;
+  const h = healthOf(id);
+  h.exhaustedUntil = until;
+  h.pauseReason = "quota";
+}
+
+/**
+ * The upstream ads gate: free-pi pauses an account's free completions
+ * (HTTP 403, "ads can't be skipped … free completions are paused") when
+ * no ads were shown for it — a temporary per-account state that clears
+ * on its own (observed clearing within minutes). Treat it like a spent
+ * budget with a fixed cooldown, but remember the reason so listings can
+ * surface it distinctly as "paused-ads" instead of a quota problem.
+ */
+export const ADS_PAUSE_COOLDOWN_MS = 30 * 60 * 1000;
+
+export function markAccountAdsPaused(id, cooldownMs = ADS_PAUSE_COOLDOWN_MS) {
+  const h = healthOf(id);
+  h.exhaustedUntil = Date.now() + cooldownMs;
+  h.pauseReason = "ads";
+}
+
+/**
+ * The display status of one account, from the health map:
+ * "ok" | "invalid" | "exhausted" (budget spent) | "paused-ads"
+ * (upstream ads gate). pausedUntil is the ISO resume time for the two
+ * paused states, else null.
+ */
+function accountStatus(id) {
+  const h = accountHealth.get(id);
+  if (!h) return { status: "ok", pausedUntil: null };
+  if (h.invalid) return { status: "invalid", pausedUntil: null };
+  if (h.exhaustedUntil > Date.now()) {
+    return {
+      status: h.pauseReason === "ads" ? "paused-ads" : "exhausted",
+      pausedUntil: new Date(h.exhaustedUntil).toISOString(),
+    };
+  }
+  return { status: "ok", pausedUntil: null };
 }
 
 function noteQuota(id, me) {
@@ -380,8 +481,10 @@ function noteQuota(id, me) {
     if (me.remaining_credits_today <= 0) {
       const refill = Date.parse(me?.refill_at ?? "");
       h.exhaustedUntil = Number.isFinite(refill) && refill > Date.now() ? refill : Date.now() + 30 * 60 * 1000;
+      h.pauseReason = "quota";
     } else if (h.exhaustedUntil && h.exhaustedUntil < Date.now() + 60 * 1000) {
       h.exhaustedUntil = 0;
+      h.pauseReason = null;
     }
   }
 }
@@ -415,6 +518,7 @@ export function summarizeQuota(account, me) {
     id: account.id,
     label: account.label,
     ok: true,
+    ...accountStatus(account.id),
     handle: me?.handle ?? null,
     tier: me?.tier ?? null,
     allowanceCredits: allowance,
@@ -456,13 +560,18 @@ export async function refreshQuotaCache(explicit, { maxAgeMs = 60 * 1000, fetchI
 }
 
 const QUOTA_ERROR_TEXT = /insufficient|quota|allowance|credit|balance|exhaust/i;
+// The ads gate's own words (observed live 2026-11-09): "free-pi is free
+// because ads pay for it, so ads can't be skipped. Ads aren't showing for
+// this account, so free completions are paused. …"
+const ADS_PAUSE_TEXT = /ads (can'?t be skipped|aren'?t showing)|free completions are paused/i;
 
 /**
  * One upstream /v1 call with account failover. Candidates are tried in
  * pick order; a 401 marks the account invalid, a 402/429 whose body talks
- * about quota marks it exhausted, and the next account is tried. Error
- * statuses are only peeked at before any body streams, so a successful
- * (possibly SSE) response is returned untouched.
+ * about quota marks it exhausted, a 403 carrying the ads-gate text marks
+ * it ads-paused for ADS_PAUSE_COOLDOWN_MS, and the next account is tried.
+ * Error statuses are only peeked at before any body streams, so a
+ * successful (possibly SSE) response is returned untouched.
  * Returns { res, account } — account is null when every candidate failed
  * and res is the last error response.
  */
@@ -487,6 +596,14 @@ export async function rotatingFetch(pathWithSearch, { method = "POST", headers =
       if (QUOTA_ERROR_TEXT.test(text)) {
         markAccountExhausted(account.id);
         void fetchAccountQuota(account, fetchImpl).catch(() => {});
+        last = res;
+        continue;
+      }
+    }
+    if (res.status === 403) {
+      const text = await res.clone().text().catch(() => "");
+      if (ADS_PAUSE_TEXT.test(text)) {
+        markAccountAdsPaused(account.id);
         last = res;
         continue;
       }
