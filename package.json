@@ -1,0 +1,36 @@
+{
+  "description": "Magpie provider plugin: free-pi (ad-funded free inference, incl. DeepSeek V4.1 Flash) with GitHub device-flow sign-in",
+  "files": [
+    "index.mjs",
+    "free-pi-core.mjs",
+    "README.md"
+  ],
+  "keywords": [
+    "magpie",
+    "opencode-plugin",
+    "free-pi"
+  ],
+  "license": "MIT",
+  "magpie": {
+    "maxConcurrency": 4,
+    "summary": {
+      "en": "free-pi: ad-funded free models (DeepSeek V4.1 Flash etc.) via GitHub sign-in",
+      "zh": "free-pi：GitHub 登录接入广告赞助的免费模型（DeepSeek V4.1 Flash 等）"
+    }
+  },
+  "main": "./index.mjs",
+  "name": "magpie-free-pi",
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "test": "node tests/smoke.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wawaTuna/magpie-free-pi.git"
+  },
+  "homepage": "https://github.com/wawaTuna/magpie-free-pi#readme",
+  "bugs": {
+    "url": "https://github.com/wawaTuna/magpie-free-pi/issues"
+  }
+}
