@@ -7,8 +7,15 @@
   ],
   "keywords": [
     "magpie",
+    "magpie-plugin",
+    "opencode",
     "opencode-plugin",
-    "free-pi"
+    "auth",
+    "provider",
+    "free-pi",
+    "deepseek",
+    "llm",
+    "ai"
   ],
   "license": "MIT",
   "magpie": {
@@ -16,12 +23,13 @@
     "summary": {
       "en": "free-pi: ad-funded free models (DeepSeek V4.1 Flash etc.) via GitHub sign-in",
       "zh": "free-pi：GitHub 登录接入广告赞助的免费模型（DeepSeek V4.1 Flash 等）"
-    }
+    },
+    "name": "free-pi"
   },
   "main": "./index.mjs",
   "name": "magpie-free-pi",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "scripts": {
     "test": "node tests/smoke.mjs"
   },
