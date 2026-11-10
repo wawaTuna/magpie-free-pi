@@ -90,4 +90,22 @@ assert.match(usage.windows[0].display, /12000/);
 const models = await hooks.provider.models();
 assert.ok(models["deepseek-v4.1-flash"], "dynamic catalogue reaches provider.models");
 
+// --- model capability metadata ---------------------------------------------------
+const v41 = models["deepseek-v4.1-flash"];
+assert.equal(v41.capabilities.reasoning, true, "v4.1-flash exposes reasoning");
+assert.equal(v41.capabilities.attachment, true, "v4.1-flash accepts image attachments (verified live)");
+assert.equal(v41.capabilities.input.image, true);
+assert.equal(v41.variants.high.reasoningEffort, "high", "thinking-strength variants map to reasoningEffort");
+assert.equal(v41.limit.context, 1048576);
+assert.ok(v41.limit.output > 8192, "output limit raised above the old flat 8192");
+const cfgSolar = cfg.provider["free-pi"].models["solar-pro-4"];
+assert.equal(cfgSolar.limit.context, 524288, "solar-pro-4 keeps its real 512K context, not the flat 1M");
+assert.equal(cfgSolar.capabilities.reasoning, true);
+const cfgV4 = cfg.provider["free-pi"].models["deepseek-v4-flash"];
+assert.equal(cfgV4.capabilities.attachment, false, "v4-flash is text-only (image parts rejected upstream, verified)");
+assert.ok(cfgV4.variants.medium, "v4-flash still gets effort variants");
+const cfgMimo = cfg.provider["free-pi"].models["mimo-v2.6-flash"];
+assert.equal(cfgMimo.capabilities.reasoning, true);
+assert.equal(cfgMimo.variants, undefined, "mimo takes no reasoning_effort upstream, so no variants");
+
 console.log("smoke: all assertions passed");

@@ -24,6 +24,7 @@ import {
   fetchCatalog,
   fetchMe,
   getSessionId,
+  modelCaps,
   pollForToken,
   startDeviceFlow,
   submitConsent,
@@ -34,11 +35,37 @@ const ICON_URL = "https://raw.githubusercontent.com/wawaTuna/magpie-free-pi/main
 const API_BASE = `${FREEPI_BASE_URL}/v1`;
 const JWT_LIFETIME_MS = 90 * 24 * 60 * 60 * 1000;
 
+// OpenCode-shape capability block for a model id, from the shared core
+// caps table (the free-pi catalogue itself carries no capability fields).
+const capsFields = (id) => {
+  const caps = modelCaps(id);
+  return {
+    limit: { context: caps.context, output: caps.output },
+    capabilities: {
+      reasoning: caps.reasoning,
+      toolcall: true,
+      attachment: caps.image,
+      input: { text: true, ...(caps.image ? { image: true } : {}) },
+    },
+    // Thinking-strength picker: the AI SDK forwards reasoningEffort to
+    // the gateway as reasoning_effort (verified honoured upstream).
+    ...(caps.effort
+      ? {
+          variants: {
+            low: { reasoningEffort: "low" },
+            medium: { reasoningEffort: "medium" },
+            high: { reasoningEffort: "high" },
+          },
+        }
+      : {}),
+  };
+};
+
 const fallbackModelConfig = () =>
   Object.fromEntries(
     FALLBACK_MODELS.map((m) => [
       m.id,
-      { name: m.name, limit: { context: 1_048_576, output: 8192 }, cost: { input: 0, output: 0 } },
+      { name: m.name, ...capsFields(m.id), cost: { input: 0, output: 0 } },
     ]),
   );
 
@@ -215,13 +242,7 @@ const server = async () => {
             id: m.id,
             name: m.name,
             api: { id: m.id, url: API_BASE, npm: "@ai-sdk/openai-compatible" },
-            limit: { context: 1_048_576, output: 8192 },
-            capabilities: {
-              reasoning: false,
-              toolcall: true,
-              attachment: false,
-              input: { text: true },
-            },
+            ...capsFields(m.id),
             cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
             ...(typeof m.name === "string" && m.name.includes("Free Unlimited") ? { free: true } : {}),
           };

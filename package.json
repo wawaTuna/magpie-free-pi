@@ -31,7 +31,7 @@
   "main": "./index.mjs",
   "name": "magpie-free-pi",
   "type": "module",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "scripts": {
     "test": "node tests/smoke.mjs"
   },

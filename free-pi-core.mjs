@@ -30,7 +30,7 @@ import { join } from "node:path";
 export const FREEPI_BASE_URL = (process.env.FREEPI_BASE_URL || "https://api.freepi.ai").replace(/\/+$/, "");
 // Sent as x-client-version. Must stay >= the server's `min` (0.6.2 when last
 // checked, 2026-11-09) or completions are refused by the forced-update gate.
-export const FREEPI_CLIENT_VERSION = "0.6.15";
+export const FREEPI_CLIENT_VERSION = "0.6.16";
 // free-pi's current consent version (free-pi-cli src/consent.ts). The login
 // flow records this version server-side before polling for the token.
 export const FREEPI_CONSENT_VERSION = "4";
@@ -126,6 +126,36 @@ export function upstreamHeaders({ jwt, sessionId, extra } = {}) {
   };
   if (jwt) headers.authorization = `Bearer ${jwt}`;
   return headers;
+}
+
+/**
+ * Per-model capability metadata. The free-pi catalogue itself carries no
+ * capability fields (ids + display names only), so this table is curated
+ * from each model's upstream spec (the catalogue's stats_id points at the
+ * matching OpenRouter entry) and verified live against the gateway
+ * (2026-11-10): reasoning_effort is honoured (reasoning tokens come back),
+ * image_url parts work on the vision models, and the text-only
+ * deepseek-v4-flash rejects image parts upstream (HTTP 400).
+ * Unknown ids get conservative defaults: no reasoning control, text only.
+ */
+export const MODEL_CAPS = {
+  "deepseek-v4.1-flash": { reasoning: true, effort: true, image: true, context: 1048576, output: 65536 },
+  "glm-5.3-flash": { reasoning: true, effort: true, image: true, context: 1048576, output: 65536 },
+  "deepseek-v4-flash": { reasoning: true, effort: true, image: false, context: 1048576, output: 65536 },
+  "deepseek-v4-pro": { reasoning: true, effort: true, image: false, context: 1048576, output: 384000 },
+  "kimi-k3.1-pro": { reasoning: true, effort: true, image: true, context: 1048576, output: 65536 },
+  // mimo reasons but its upstream takes no reasoning_effort parameter.
+  "mimo-v2.6-flash": { reasoning: true, effort: false, image: true, context: 1050000, output: 131072 },
+  "solar-pro4": { reasoning: true, effort: true, image: false, context: 524288, output: 32768 },
+  "solar-pro-4": { reasoning: true, effort: true, image: false, context: 524288, output: 32768 },
+  "particle": { reasoning: true, effort: true, image: true, context: 1048576, output: 131072 },
+};
+
+export const DEFAULT_MODEL_CAPS = { reasoning: false, effort: false, image: false, context: 1048576, output: 8192 };
+
+/** Capability metadata for a free-pi model id (defaults for unknown ids). */
+export function modelCaps(id) {
+  return MODEL_CAPS[id] ?? DEFAULT_MODEL_CAPS;
 }
 
 let catalogCache = { at: 0, models: null };
