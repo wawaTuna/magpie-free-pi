@@ -66,6 +66,13 @@ const catalog = await core.fetchCatalog(async () =>
 );
 assert.deepEqual(catalog.map((m) => m.id), ["deepseek-v4.1-flash"], "unavailable models filtered");
 
+// --- package manifest: display name + icon --------------------------------------
+import { readFileSync } from "node:fs";
+const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+assert.equal(pkg.magpie.name, "magpie-free-pi", "Installed row shows magpie-free-pi, not free-pi");
+assert.match(pkg.magpie.icon, /^https:\/\/.+\.png$/, "magpie.icon is an https png URL");
+assert.ok(pkg.files.includes("assets/icon.png"), "icon file ships in the npm package");
+
 // --- plugin hooks ---------------------------------------------------------------
 const plugin = (await import("../index.mjs")).default;
 assert.equal(plugin.id, "magpie-free-pi");
@@ -74,6 +81,7 @@ const cfg = {};
 await hooks.config(cfg);
 assert.equal(cfg.provider["free-pi"].npm, "@ai-sdk/openai-compatible");
 assert.deepEqual(hooks.auth.methods.map((m) => m.type), ["oauth", "api"]);
+assert.equal(hooks.auth.icon, pkg.magpie.icon, "auth.icon matches magpie.icon so the provider row shows the same icon");
 globalThis.fetch = async (url) =>
   String(url).includes("/me") ? jsonRes(200, meRecord) : jsonRes(200, { models: [{ id: "deepseek-v4.1-flash", name: "V4.1" }] });
 const usage = await hooks.auth.usage(async () => ({ type: "oauth", access: "jwt-b" }));

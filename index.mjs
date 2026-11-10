@@ -30,6 +30,7 @@ import {
 } from "./free-pi-core.mjs";
 
 const PROVIDER_ID = "free-pi";
+const ICON_URL = "https://raw.githubusercontent.com/wawaTuna/magpie-free-pi/main/assets/icon.png";
 const API_BASE = `${FREEPI_BASE_URL}/v1`;
 const JWT_LIFETIME_MS = 90 * 24 * 60 * 60 * 1000;
 
@@ -59,6 +60,10 @@ const server = async () => {
 
     auth: {
       provider: PROVIDER_ID,
+      // Magpie: auth.icon wins over package.json's magpie.icon for the
+      // provider's picture; both point at the same magpie-free-pi icon so
+      // the plugin row and the provider row show the same face.
+      icon: ICON_URL,
 
       methods: [
         {
