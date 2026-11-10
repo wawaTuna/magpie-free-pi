@@ -37,10 +37,17 @@ const JWT_LIFETIME_MS = 90 * 24 * 60 * 60 * 1000;
 
 // OpenCode-shape capability block for a model id, from the shared core
 // caps table (the free-pi catalogue itself carries no capability fields).
+// Magpie reads the top-level reasoning/attachment/modalities fields of a
+// model entry (the capabilities object alone is ignored — verified live),
+// so both shapes are emitted.
 const capsFields = (id) => {
   const caps = modelCaps(id);
   return {
     limit: { context: caps.context, output: caps.output },
+    reasoning: caps.reasoning,
+    attachment: caps.image,
+    tool_call: true,
+    modalities: { input: caps.image ? ["text", "image"] : ["text"], output: ["text"] },
     capabilities: {
       reasoning: caps.reasoning,
       toolcall: true,
